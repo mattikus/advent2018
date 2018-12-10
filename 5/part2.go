@@ -8,41 +8,27 @@ import (
 	"runtime"
 )
 
-const offset int = 32 // integer delta between capital/lowercase letter in ascii
+const offset byte = 32 // integer delta between capital/lowercase letter in ascii
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-func cmp(x, y byte) bool {
-	return abs(int(x)-int(y)) == offset
-}
-
-func min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
+func cmp(a, b byte) bool {
+	return a != b && (a|offset == b || b|offset == a)
 }
 
 func collapse(input []byte) int {
-	for x := 0; x < len(input)-1; {
-		if cmp(input[x], input[x+1]) {
-			input = append(input[:x], input[x+2:]...)
-			x = 0
-		} else {
-			x++
+	for i := 0; i < len(input)-1; i++ {
+		if cmp(input[i], input[i+1]) {
+			input = append(input[:i], input[i+2:]...)
+			i = -1
 		}
 	}
 	return len(input)
 }
 
-func collapseWorker(jobs <-chan []byte, results chan<- int) {
+func collapseWorker(input []byte, jobs <-chan byte, results chan<- int) {
 	for j := range jobs {
-		results <- collapse(j)
+		polymer := bytes.Replace(input, []byte{j}, []byte{}, -1)
+		polymer = bytes.Replace(polymer, []byte{j + offset}, []byte{}, -1)
+		results <- collapse(polymer)
 	}
 }
 
@@ -51,24 +37,27 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	input = bytes.TrimRight(input, "\n")
+
 	results := make(chan int, 26)
-	jobs := make(chan []byte, 26)
+	jobs := make(chan byte, 26)
 
 	// Build a worker pool roughly equal to the cores available
-	for w := 1; w <= runtime.NumCPU(); w++ {
-		go collapseWorker(jobs, results)
+	for w := 0; w < runtime.NumCPU(); w++ {
+		go collapseWorker(input, jobs, results)
 	}
 
-	for j := 65; j < 91; j++ {
-		jobs <- bytes.Replace(input, []byte{byte(j)}, []byte{}, -1)
+	// Create some jobs where we remove each unit from the polymer
+	for j := byte('A'); j < byte('a'); j++ {
+		jobs <- j
 	}
 	close(jobs)
 
-	answer := 100000000
-	for i := 0; i <= 25; i++ {
-		answer = min(answer, <-results)
+	var answer int
+	for i := 0; i < 26; i++ {
+		if r := <-results; r < answer || answer == 0 {
+			answer = r
+		}
 	}
 
 	fmt.Printf("Problem 5.2 Answer: %d\n", answer)
