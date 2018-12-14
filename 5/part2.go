@@ -11,7 +11,7 @@ import (
 const offset byte = 32 // integer delta between capital/lowercase letter in ascii
 
 func cmp(a, b byte) bool {
-	return a != b && (a|offset == b || b|offset == a)
+	return a != b && a|offset == b|offset
 }
 
 func collapse(input []byte) int {
